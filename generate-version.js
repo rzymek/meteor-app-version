@@ -1,21 +1,41 @@
 var exec = Npm.require('child_process').exec;
-var fs = Npm.require('fs');
 
-var mkdirSync = function (path) {
+var handler = function (compileStep) {
     try {
-        fs.mkdirSync(path);
+        exec('git describe --tags', Meteor.bindEnvironment(function (error, stdout, stderr) {
+            if(error || stderr) {
+                compileStep.error({
+                    sourcePath: compileStep.inputPath,
+                    message: error || stderr
+                });
+            }
+            try {
+                var version = stdout.replace(/[\n']/g, '');
+                var name = compileStep.inputPath.replace(/^.*[/]([^/]+).version$/, '$1');
+                var src = "" + name + " = '" + version + "';\n" +
+                        "if(Meteor.isClient) {\n" +
+                        "   Template.registerHelper('" + name + "', function () {\n" +
+                        "       return " + name + ";\n" +
+                        "   });\n" +
+                        "}";
+                compileStep.addJavaScript({
+                    path: compileStep.inputPath + '.js',
+                    sourcePath: compileStep.inputPath,
+                    data: src
+                });
+            } catch (e) {
+                compileStep.error({
+                    sourcePath: compileStep.inputPath,
+                    message: e
+                });
+            }
+        }));
     } catch (e) {
-        if (e.code !== 'EEXIST')
-            throw e;
+        compileStep.error({
+            sourcePath: compileStep.inputPath,
+            message: e
+        });
     }
 };
 
-exec('git describe --tags', function (error, stdout, stderr) {
-    try {
-        var version = stdout.replace(/[\n']/g, '');
-        mkdirSync('public');
-        fs.writeFile('public/VERSION.txt', version);
-    } catch (e) {
-        console.error(e);
-    }
-});
+Plugin.registerSourceHandler("version", handler);
