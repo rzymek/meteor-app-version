@@ -1,0 +1,1 @@
+Generates `public/VERSION.txt` file based on `git describe --tags`.
